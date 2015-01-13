@@ -1,0 +1,5 @@
+# Custom-added entries
+
+# example.com
+# example.net
+# .\\.example.net # Include all subdomains of example.net
