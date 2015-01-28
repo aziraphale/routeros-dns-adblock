@@ -14,8 +14,8 @@ $files = [
 // Might be a bit memory-intensive/slow... not strictly necessary, as RouterOS will just display a warning on duplicates
 define('SKIP_DUPLICATES', false);
 
-// Maybe faster? -- actually it's not :(
-define('SKIP_DUPLICATES_CRC32', false);
+// Seems to be faster - use integer (CRC32 hash) keys for matching duplicates, rather than strings
+define('SKIP_DUPLICATES_CRC32', true);
 
 define('PER_FILE_LIMIT', 3000);
 
@@ -45,7 +45,10 @@ foreach ($files as $type => $details) {
 
 	$addLn = function($name, $comment = null) use ($type, $destIp, &$fpWrite, &$hosts, &$hostsList, &$hostsInThisFile, &$fileNum) {
 		if (SKIP_DUPLICATES) {
-			$searchName = crc32($name);
+			$searchName = strtolower($name);
+			if (SKIP_DUPLICATES_CRC32) {
+				$searchName = crc32($searchName);
+			}
 			if (in_array($searchName, $hostsList)) {
 				return;
 			} else {
