@@ -35,7 +35,9 @@ while ($line = fgets($fpRead)) {
 
 	if (!$headerFinished) {
 		// First non-header line
-		fputs($fpWrite, $extraHeader);
+		if (!BIND9_OUTPUT) {
+			fputs($fpWrite, $extraHeader);
+		}
 		$headerFinished = true;
 	}
 

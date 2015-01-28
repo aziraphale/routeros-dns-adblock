@@ -1,6 +1,6 @@
 <?php
 
-$files = [
+$files = [ // destination IPs only used in RouterOS mode
 	"peter-lowe" 			=> ["240.0.0.1"],
 	"mvps" 					=> ["240.0.0.2"],
 	"hphosts" 				=> ["240.0.0.3"],
@@ -11,13 +11,20 @@ $files = [
 	"custom"				=> ["240.0.0.255"],
 ];
 
-// Might be a bit memory-intensive/slow... not strictly necessary, as RouterOS will just display a warning on duplicates
-define('SKIP_DUPLICATES', false);
+// Might be a bit memory-intensive/slow... not strictly necessary, as RouterOS will just display a warning on duplicates. Only applicable in RouterOS mode
+define('SKIP_DUPLICATES', true);
 
 // Seems to be faster - use integer (CRC32 hash) keys for matching duplicates, rather than strings
 define('SKIP_DUPLICATES_CRC32', true);
 
+// Only applies to RouterOS output
 define('PER_FILE_LIMIT', 3000);
+
+// Enables output of bind9 zone files instead of RouterOS scripts. Forces skip_duplicates to ON
+define('BIND9_OUTPUT', true);
+
+// Name of Bind9 "null" zone file
+define('BIND9_NULL_ZONEFILE_NAME', '/etc/bind/db.null');
 
 define('IN_PROCESS', 1);
 $totalTimeStart = microtime(true);
@@ -25,7 +32,15 @@ $totalHosts = 0;
 $totalFiles = 0;
 $hostsList = [];
 
-echo "NOTE: Removing duplicate hosts is " . (SKIP_DUPLICATES ? "ENABLED" : "DISABLED") . (SKIP_DUPLICATES_CRC32 ? ' (via crc32)' : '') . ".\r\n\r\n";
+if (BIND9_OUTPUT) {
+	echo "NOTE: Generating Bind9 zone output instead of RouterOS commands. Forcing SKIP_DUPLICATES to be ON";
+	if (SKIP_DUPLICATES_CRC32) {
+		echo " (via crc32)";
+	}
+	echo ".\r\n\r\n";
+} else {
+	echo "NOTE: Removing duplicate hosts is " . (SKIP_DUPLICATES ? "ENABLED" : "DISABLED") . (SKIP_DUPLICATES_CRC32 ? ' (via crc32)' : '') . ".\r\n\r\n";
+}
 
 foreach ($files as $type => $details) {
 	list($destIp) = $details;
@@ -40,11 +55,12 @@ foreach ($files as $type => $details) {
 	$hosts = 0;
 	$hostsInThisFile = 0;
 	$fileNum = 0;
+	$outputFilename = (BIND9_OUTPUT) ? "named.conf.adblock-$type" : "script.$type-$fileNum.rsc";
 	$fpRead = fopen("source.$type.txt", 'rb');
-	$fpWrite = fopen("script.$type-$fileNum.rsc", 'wb');
+	$fpWrite = fopen($outputFilename, 'wb');
 
 	$addLn = function($name, $comment = null) use ($type, $destIp, &$fpWrite, &$hosts, &$hostsList, &$hostsInThisFile, &$fileNum) {
-		if (SKIP_DUPLICATES) {
+		if (BIND9_OUTPUT || SKIP_DUPLICATES) {
 			$searchName = strtolower($name);
 			if (SKIP_DUPLICATES_CRC32) {
 				$searchName = crc32($searchName);
@@ -56,7 +72,7 @@ foreach ($files as $type => $details) {
 			}
 		}
 
-		if ($hostsInThisFile >= PER_FILE_LIMIT) {
+		if (!BIND9_OUTPUT && $hostsInThisFile >= PER_FILE_LIMIT) {
 			// Switch to a new file
 			fclose($fpWrite);
 			++$fileNum;
@@ -66,21 +82,40 @@ foreach ($files as $type => $details) {
 			fputs($fpWrite, "/ip dns static\r\n\r\n");
 		}
 
-		if (!empty($comment)) {
-			// Includes a comment
-			fputs($fpWrite, sprintf(
-				"add address=%s name=\"%s\" comment=\"%s\"\r\n",
-				$destIp,
-				$name,
-				addcslashes($comment, '?"')
-			));
+		if (BIND9_OUTPUT) {
+			if (!empty($comment)) {
+				// Includes a comment
+				fputs($fpWrite, sprintf(
+					"zone \"%s\" { type master; notify no; file \"%s\"; }; // %s\r\n",
+					$name,
+					BIND9_NULL_ZONEFILE_NAME,
+					addcslashes($comment, '"')
+				));
+			} else {
+				// No comment
+				fputs($fpWrite, sprintf(
+					"zone \"%s\" { type master; notify no; file \"%s\"; };\r\n",
+					$name,
+					BIND9_NULL_ZONEFILE_NAME
+				));
+			}
 		} else {
-			// No comment
-			fputs($fpWrite, sprintf(
-				"add address=%s name=\"%s\"\r\n",
-				$destIp,
-				$name
-			));
+			if (!empty($comment)) {
+				// Includes a comment
+				fputs($fpWrite, sprintf(
+					"add address=%s name=\"%s\" comment=\"%s\"\r\n",
+					$destIp,
+					$name,
+					addcslashes($comment, '?"')
+				));
+			} else {
+				// No comment
+				fputs($fpWrite, sprintf(
+					"add address=%s name=\"%s\"\r\n",
+					$destIp,
+					$name
+				));
+			}
 		}
 		++$hosts;
 		++$hostsInThisFile;
