@@ -27,14 +27,16 @@ while ($line = fgets($fpRead)) {
 			continue;
 		} // else we've finished reading the header
 	}
-	
+
 	if ($line == '') {
 		continue;
 	}
 
 	if (!$headerFinished) {
 		// First non-header line
-		fputs($fpWrite, $extraHeader);
+		if (!BIND9_OUTPUT) {
+			fputs($fpWrite, $extraHeader);
+		}
 		$headerFinished = true;
 	}
 
@@ -51,7 +53,7 @@ while ($line = fgets($fpRead)) {
 		}
 
 		$addLn($matches[1], @$matches[2]);
-	} else { 
+	} else {
 		if (strpos($line, 'broadcasthost') === false && strpos($line, 'localhost') === false) {
 			echo '.';
 			var_dump($line);

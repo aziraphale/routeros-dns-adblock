@@ -16,7 +16,7 @@ $headerFinished = false;
 while ($line = fgets($fpRead)) {
 	$line = trim($line);
 	$line = str_replace("\t", "    ", $line);
-	
+
 	if ($line == '') {
 		continue;
 	}
@@ -31,7 +31,9 @@ while ($line = fgets($fpRead)) {
 
 	if (!$headerFinished) {
 		// First non-header line
-		fputs($fpWrite, $extraHeader);
+		if (!BIND9_OUTPUT) {
+			fputs($fpWrite, $extraHeader);
+		}
 		$headerFinished = true;
 	}
 
